@@ -1,0 +1,89 @@
+import { Sidebar } from 'cypress/lib/selectors/sidebar';
+import { VirtualListView } from 'cypress/lib/selectors/virtual-list-view';
+import { Combobox } from 'cypress/lib/selectors/combobox';
+import { Edit } from '../../../lib/selectors/edit';
+import { DateConversion } from 'cypress/lib/helpers/date-helper';
+import { Button } from 'cypress/lib/selectors/button';
+
+const timestamp = new Date().getTime().toString();
+const dc = new DateConversion();
+const policyNum = `POL${timestamp}`;
+const effectiveDateuf = new Date(new Date().setFullYear(new Date().getFullYear() - 5));
+const effectiveDate = dc.convertDate(effectiveDateuf);
+const expirationDateuf = new Date(new Date().setFullYear(new Date().getFullYear() + 1));
+const expirationDate = dc.convertDate(expirationDateuf);
+const vlistPolicy = new VirtualListView('vlvwPolicies');
+const vlistAttach = new VirtualListView('vlvwAttachment');
+
+beforeEach(() => {
+  // login info
+  const loginInfo = [Cypress.env('LOGIN_ENTERPRISE'), Cypress.env('LOGIN_USER'), Cypress.env('LOGIN_PASSWORD'), Cypress.env('LOGIN_DATABASE')] as const;
+  // navigate to Account
+  cy.epicNavigateToProgram(
+    'Accounts',
+    {
+      ['A']: 78890,
+      ['Culture']: 'en-US',
+      ['F']: 'False',
+      ['IK']: '78890',
+      ['N']: '0',
+      ['T']: 'CUST'
+    },
+    ...loginInfo
+  );
+  cy.waitForScnAction('Client.Detail', 'activated', { timeout: 20000 });
+});
+
+afterEach(() => {
+  //epic logout
+  cy.epicLogout();
+});
+
+describe('QUE-601', { tags: ['accounts', 'manual'] }, () => {
+  it('Test add Policy and navigate to Attachments Perform - Search Where - Clear Filter', { tags: ['regression'] }, () => {
+    //add  a policy
+    new Sidebar().sidebarButton('Policies').element().click();
+    //Wait for the Policy screen to display
+    cy.get('[data-automation-id=rpnlPolicyView]', {
+      timeout: 30000
+    }).should('be.visible');
+    vlistPolicy.addButton().element().click();
+    cy.get('[data-automation-id=cboPolicyType]', {
+      timeout: 30000
+    }).should('be.visible');
+    new Combobox('cboPolicyType').selectItem(1);
+    new Combobox('cboDepartment').selectItem(1);
+    new Edit('strePolicyNumber').element().type(policyNum);
+    new Combobox('cboStatus').selectItem(1);
+    new Edit('dteEffective').element().clear().type(effectiveDate);
+    new Edit('dteExpiration').element().clear().type(expirationDate);
+    new Button('btnFinish').element().eq(0).click();
+    new Button('btnFinish').element().eq(1).click();
+
+    //Wait for the Policy screen to display
+    cy.get('[data-automation-id=rpnlPolicyView]', {
+      timeout: 30000
+    }).should('be.visible');
+
+    //click on attachements verify listview display
+    new Sidebar().sidebarButton('Attachments').element().click();
+    cy.get('[data-automation-id=vlvwAttachment]', {
+      timeout: 30000
+    }).should('be.visible');
+
+    //checking filters by applying values
+    vlistAttach.filterFields().fillInSearchCriteria('Attached By', 'Contains', 'V2018.1');
+    cy.get('[data-automation-id=btnClear]', {
+      timeout: 30000
+    }).should('be.visible');
+    vlistAttach.filterFields().clearButton().element().click();
+
+    //click on again policies and attachments Button verify attachments value
+    new Sidebar().sidebarButton('Policies').element().click();
+    new Sidebar().sidebarButton('Attachments').element().click();
+    cy.get('[data-automation-id=vlvwAttachment]', {
+      timeout: 30000
+    }).should('be.visible');
+    cy.get('span[class=context-menu-title] span').contains('Last 6 Months');
+  });
+});
